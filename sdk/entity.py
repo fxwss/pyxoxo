@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from enum import Enum
-import offsets as _offsets
-from process import ComplexProcessHandle, SimpleProcessHandle, find_module_by_name, read_memory, write_memory
+import process.offsets as _offsets
+from process.process import ComplexProcessHandle, SimpleProcessHandle, find_module_by_name, read_memory, write_memory
 
 offsets = _offsets.get()
 
@@ -12,16 +12,11 @@ class BaseEntity:
     address: int
     process: ComplexProcessHandle
 
-    def get(self, offset: int):
-        return read_memory(self.process, self.address + offset)
+    def get(self, offset: int, format: str = 'i'):
+        return read_memory(self.process, self.address + offset, format)
 
     def valid(self):
         return bool(self.address) and self.id > 0 and self.id < 32
-
-
-class Teams(Enum):
-    T = 2
-    CT = 3
 
 
 @dataclass(eq=True, frozen=True)
@@ -47,14 +42,6 @@ class Entity(BaseEntity):
     def enemy_of(self, entity: BaseEntity) -> bool:
         self_team: int = self.get(offsets.m_iTeamNum).into('i')
         other_team: int = entity.get(offsets.m_iTeamNum).into('i')
-
-        valid_teams = (
-            Teams.T,
-            Teams.CT
-        )
-
-        if self_team not in valid_teams or other_team not in valid_teams:
-            return False
 
         return self_team != other_team
 

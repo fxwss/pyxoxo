@@ -1,3 +1,4 @@
+import json
 import requests
 
 from dataclasses import dataclass
@@ -163,6 +164,10 @@ def __get_offset_json_from_github() -> dict:
     return requests.get("https://raw.githubusercontent.com/frk1/hazedumper/master/csgo.json").json()
 
 
+def __get_offset_json_from_file() -> dict:
+    return json.loads(open("csgo.json", "rt").read())
+
+
 __memoized_offsets = None
 
 
@@ -173,9 +178,13 @@ def get():
         return __memoized_offsets
 
     json = __get_offset_json_from_github()
+    local = __get_offset_json_from_file()
 
-    signatures = json["signatures"]
-    netvars = json["netvars"]
+    # Compare timestamps
+    selected = json if json["timestamp"] > local["timestamp"] else local
+
+    signatures = selected["signatures"]
+    netvars = selected["netvars"]
 
     # parse the json to the Offsets dataclass
     offsets = Offsets(

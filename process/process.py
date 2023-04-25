@@ -2,6 +2,9 @@ import ctypes
 import struct
 from ctypes import wintypes
 from dataclasses import dataclass
+from typing import Any
+
+from process.structs import MEMORY_BASIC_INFORMATION
 
 
 @dataclass(eq=True, frozen=True)
@@ -40,13 +43,16 @@ class MemoryPiece:
     format: str
 
     # uses struct to parse bytes to a data type
-    def into(self, data_type: str | None = None):
+    def into(self, data_type: str | None = None) -> Any:
         if data_type is None:
             data_type = self.format
 
         unpacked = struct.unpack(data_type, self.data)
 
-        return unpacked[0]
+        if len(unpacked) == 1:
+            return unpacked[0]
+
+        return unpacked
 
     def read(self):
         return read_memory(self.process, self.address, self.format)
@@ -228,6 +234,41 @@ def find_module_by_name(process: SimpleProcessHandle | ComplexProcessHandle, nam
         _modules_memoize[process.handle][name] = module
 
     return _modules_memoize[process.handle][name]
+
+
+def virtual_query(process: SimpleProcessHandle, address: int):
+    information = MEMORY_BASIC_INFORMATION()
+
+    ctypes.windll.kernel32.VirtualQueryEx(
+        process.handle,
+        int(address),
+        ctypes.byref(information),
+        ctypes.sizeof(information)
+    )
+
+    error = ctypes.windll.kernel32.GetLastError()
+    ctypes.windll.kernel32.SetLastError(0)
+
+    if error:
+        raise Exception(f"VirtualQueryEx failed with error {error}")
+
+    return information
+
+
+def has_active_window(process: SimpleProcessHandle):
+    # get the process window
+    window = ctypes.windll.user32.GetForegroundWindow()
+
+    # get the process id from the window
+    window_pid = ctypes.c_ulong()
+    ctypes.windll.user32.GetWindowThreadProcessId(
+        window, ctypes.byref(window_pid))
+
+    # check if the process id is the same as the process id we are looking for
+    if window_pid.value == process.pid:
+        return True
+
+    return False
 
 
 def read_memory(process: SimpleProcessHandle, address: int, format: str = 'i'):

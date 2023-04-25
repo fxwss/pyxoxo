@@ -1,13 +1,9 @@
-from offsets import Offsets
-from process import ComplexProcessHandle
+from process.offsets import Offsets
+from process.process import ComplexProcessHandle
 from sdk.entity import get_local_player, iter_entities
 
 
-def start(process: ComplexProcessHandle, offsets: Offsets):
-    ...
-
-
-def update(process: ComplexProcessHandle, offsets: Offsets, _) -> None:
+def update(process: ComplexProcessHandle, offsets: Offsets) -> None:
     player = get_local_player(process)
 
     enemies = filter(

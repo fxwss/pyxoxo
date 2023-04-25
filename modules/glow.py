@@ -1,13 +1,9 @@
-from offsets import Offsets
-from process import ComplexProcessHandle
+from process.offsets import Offsets
+from process.process import ComplexProcessHandle
 from sdk.entity import Entity, get_local_player, iter_entities
 
 
-def start(process: ComplexProcessHandle, offsets: Offsets):
-    ...
-
-
-def update(process: ComplexProcessHandle, offsets: Offsets, _):
+def update(process: ComplexProcessHandle, offsets: Offsets):
     player = get_local_player(process)
 
     def rgba(entity: Entity):

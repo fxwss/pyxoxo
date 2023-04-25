@@ -4,14 +4,11 @@ from threading import Thread
 import time
 from typing import Callable, TypeVar
 
-from offsets import Offsets
-from process import ComplexProcessHandle
+from process.offsets import Offsets
+from process.process import ComplexProcessHandle, find_module_by_name, has_active_window, read_memory
 
-StoreType = TypeVar('StoreType')
 
-ModuleStartFn = Callable[[ComplexProcessHandle, Offsets], StoreType | None]
-ModuleUpdateFn = Callable[[ComplexProcessHandle,
-                           Offsets, StoreType | None], StoreType | None]
+ModuleUpdateFn = Callable[[ComplexProcessHandle, Offsets], None]
 
 
 class ModuleStatus(Enum):
@@ -25,7 +22,6 @@ class ModuleStatus(Enum):
 class CheatModule:
     name: str
 
-    start: ModuleStartFn
     update: ModuleUpdateFn
 
     interval: float = 1 / 1000
@@ -39,17 +35,28 @@ class CheatModule:
         self.status = ModuleStatus.ACTIVE
 
         def loop():
-            store = self.start(process, offsets)
-            while self.status != ModuleStatus.INACTIVE:
+            engine = find_module_by_name(process, 'engine.dll')
 
-                if self.status == ModuleStatus.PAUSED:
-                    time.sleep(self.interval)
+            while self.status != ModuleStatus.INACTIVE:
+                time.sleep(self.interval)
+
+                client_state = read_memory(
+                    process, engine + offsets.dwClientState
+                ).into('i')
+
+                # 0     = lobby
+                # 2 - 5 = loading
+                # 6     = in game
+                game_state = read_memory(
+                    process, client_state + offsets.dwClientState_State
+                ).into('i')
+
+
+
+                if self.status == ModuleStatus.PAUSED or not has_active_window(process) or game_state != 6:
                     continue
 
-                if maybe_store := self.update(process, offsets, store):
-                    store = maybe_store
-
-                time.sleep(self.interval)
+                self.update(process, offsets)
 
         def wrapper():
             nonlocal self

@@ -1,11 +1,8 @@
 from input.input import KeyCodes, Keyboard
-from offsets import Offsets
-from process import ComplexProcessHandle
+from process.offsets import Offsets
+from process.process import ComplexProcessHandle
 from sdk.entity import get_local_player
 
-
-def start(process: ComplexProcessHandle, offsets: Offsets):
-    ...
 
 # Flags
 #
@@ -16,7 +13,7 @@ def start(process: ComplexProcessHandle, offsets: Offsets):
 # 263 - Crouched      | 0001 0000 0111
 
 
-def update(process: ComplexProcessHandle, offsets: Offsets, _):
+def update(process: ComplexProcessHandle, offsets: Offsets):
     player = get_local_player(process)
     flags = player.get(offsets.m_fFlags).into('i')
 

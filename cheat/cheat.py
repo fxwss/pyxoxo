@@ -4,9 +4,9 @@ from dataclasses import dataclass
 
 from cheat.module import CheatModule
 from input.input import Keyboard
-from offsets import Offsets
-from offsets import get as get_offsets
-from process import ensure_complex, find_process_by_name
+from process.offsets import Offsets
+from process.offsets import get as get_offsets
+from process.process import ensure_complex, find_process_by_name
 
 
 @dataclass(eq=True, frozen=True)
