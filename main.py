@@ -1,20 +1,30 @@
+import os
+
 from cheat.cheat import Cheat
 from cheat.module import CheatModule
-from modules import bhop, glow, radar, trigger, aimbot
+
+from utils import set_proc_name
+from logger import logger
+
+from modules import triggerbot, esp
 
 
 def main():
+    logger.info("xoxo: setting title")
+    set_proc_name('xoxo')
+
+    pid = os.getpid()
+    logger.info(f"PID: {pid}")
+
     Cheat(
-        'csgo.exe',
+        'cs2',
         [
-            CheatModule('Glow', glow.update),
-            CheatModule('Bunny hopping', bhop.update),
-            CheatModule('Trigger', trigger.update),
-            CheatModule('Radar', radar.update),
-            CheatModule('Aimbot', aimbot.update)
+            CheatModule('Trigger', triggerbot.update, 1 / 60),
+            CheatModule('ESP', esp.update, 1 / 1000)
         ]
     )\
         .start_modules()\
+        .render_gui()\
         .wait()
 
 

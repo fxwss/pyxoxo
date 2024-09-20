@@ -1,3 +1,7 @@
-requests
-imgui[glfw]
+mouse
+keyboard
+rich
+ewmh
+imgui[full]
 numpy
+glfw[preview]

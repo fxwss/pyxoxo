@@ -1,11 +1,19 @@
 import ctypes
 from enum import Enum
 
+from process.interfaces import ComplexProcessHandle, SimpleProcessHandle
+
 
 class Architecture(Enum):
     x86 = 0
     x64 = 1
     unknown = 2
+
+def ensure_complex(process: SimpleProcessHandle):
+    if not isinstance(process, ComplexProcessHandle):
+        raise Exception("Process is not complex")
+
+    return process
 
 
 def get_architecture():

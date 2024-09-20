@@ -1,23 +1,13 @@
+import time
+
 from dataclasses import dataclass
-from enum import Enum
-import process.offsets as _offsets
-from process.process import ComplexProcessHandle, SimpleProcessHandle, find_module_by_name, read_memory, write_memory
+from math import sqrt
 
-offsets = _offsets.get()
+from process import (ComplexProcessHandle, find_module_by_name, offsets,
+                     read_memory)
+from sdk.base import BaseEntity
 
-
-@dataclass(eq=True, frozen=True)
-class BaseEntity:
-    id: int
-    address: int
-    process: ComplexProcessHandle
-
-    def get(self, offset: int, format: str = 'i'):
-        return read_memory(self.process, self.address + offset, format)
-
-    def valid(self):
-        return bool(self.address) and self.id > 0 and self.id < 32
-
+SPACING = 0x78
 
 @dataclass(eq=True, frozen=True)
 class Entity(BaseEntity):
@@ -36,94 +26,71 @@ class Entity(BaseEntity):
 
     def __int__(self):
         return self.address
+    
+    def is_alive(self):
+        return self.valid() and self.health > 0
+    
+    @property
+    def velocity(self) -> tuple[float, float, float]:
+        return self.get(offsets.m_vecVelocity, '3f').unwrap()
+    
+    @property
+    def abs_velocity(self) -> tuple[float, float, float]:
+        return self.get(offsets.m_vecAbsVelocity, '3f').unwrap()
+    
+    @property
+    def team(self):
+        return self.get(offsets.m_iTeamNum, 'H').unwrap()
+    
+    @property
+    def health(self):
+        return self.get(offsets.m_iHealth, 'i').unwrap()
+    
+    @property
+    def speed(self):
+        return sqrt(sum(map(lambda x: pow(x, 2), self.abs_velocity)))
+    
+    @property
+    def origin(self):
+        return self.get(offsets.m_vOldOrigin, '3f').unwrap()
 
-    # utils
+    @property
+    def head(self):
+        #scene = self.get(offsets.m_pGameSceneNode, 'Q').unwrap()
+        #bones = read_memory(self.process, scene + offsets.m_modelState + 0x80, 'Q').unwrap()
 
-    def enemy_of(self, entity: BaseEntity) -> bool:
-        self_team: int = self.get(offsets.m_iTeamNum).into('i')
-        other_team: int = entity.get(offsets.m_iTeamNum).into('i')
+        #return read_memory(self.process, bones + 6 * 32, '3f').unwrap()
 
-        return self_team != other_team
+        x, y, z =  self.origin
 
-    def spot(self):
-        write_memory(self.process, self + offsets.m_bSpotted, 1)
-
-    def glow(self, color: tuple[float, float, float, float]):
-        client = find_module_by_name(self.process, "client.dll").base_address
-        glow_manager = read_memory(
-            self.process, client + offsets.dwGlowObjectManager).into('i')
-        glow_index = self.get(offsets.m_iGlowIndex).into('i')
-
-        write_memory(self.process, glow_manager +
-                     (glow_index * 0x38) + 0x8, color[0])
-        write_memory(self.process, glow_manager +
-                     (glow_index * 0x38) + 0xC, color[1])
-        write_memory(self.process, glow_manager +
-                     (glow_index * 0x38) + 0x10, color[2])
-        write_memory(self.process, glow_manager +
-                     (glow_index * 0x38) + 0x14, color[3])
-
-        write_memory(self.process, glow_manager +
-                     (glow_index * 0x38) + 0x28, 1)
-
-
-@dataclass(eq=True, frozen=True)
-class LocalPlayer(Entity):
-
-    def jump(self):
-        client = find_module_by_name(self.process, "client.dll").base_address
-        write_memory(self.process, client + offsets.dwForceJump, 5)
-
-    def stop_jump(self):
-        client = find_module_by_name(self.process, "client.dll").base_address
-        write_memory(self.process, client + offsets.dwForceJump, 4)
-
-    def attack(self):
-        client = find_module_by_name(self.process, "client.dll").base_address
-        write_memory(self.process, client + offsets.dwForceAttack, 6)
-
-    def start_attack(self):
-        client = find_module_by_name(self.process, "client.dll").base_address
-        write_memory(self.process, client + offsets.dwForceAttack, 5)
-
-    def stop_attack(self):
-        client = find_module_by_name(self.process, "client.dll").base_address
-        write_memory(self.process, client + offsets.dwForceAttack, 4)
-
-    def in_crosshair(self):
-        id = self.get(offsets.m_iCrosshairId).into('i')
-
-        if id == 0:
-            return None
-
-        return get_entity(self.process, id - 1)
-
-
-def get_local_player(process: ComplexProcessHandle) -> LocalPlayer:
-    engine = find_module_by_name(process, "engine.dll").base_address
-
-    client_state = read_memory(process, engine + offsets.dwClientState).into()
-    local_player_index = read_memory(process,
-                                     client_state + offsets.dwClientState_GetLocalPlayer).into()
-
-    entity = get_entity(process, local_player_index)
-
-    return LocalPlayer(entity.id, entity.address, entity.process)
+        return x, y, z + 72.0
 
 
 def get_entity(process: ComplexProcessHandle, id: int) -> Entity:
-
     if id < 0:
         raise Exception(f"Entity id must be greater than 0, got {id}")
 
-    client = find_module_by_name(process, "client.dll").base_address
-    entity_list = client + offsets.dwEntityList
+    client = find_module_by_name(process, "libclient.so").base_address
+    entity_list = read_memory(process, client + offsets.dwEntityList, 'q').unwrap()
 
-    address = read_memory(process, entity_list + id * 0x10).into()
+    entry = read_memory(process, entity_list + 0x8 * (id >> 9) + 0x10, 'q').unwrap()
+    address = read_memory(process, entry + SPACING * (id & 0x1FF), 'q').unwrap()
 
     return Entity(id, address, process)
 
+def iter_entities(process: ComplexProcessHandle, start=1, end=64):
+    client = find_module_by_name(process, "libclient.so").base_address
+    entity_list = read_memory(process, client + offsets.dwEntityList, 'q').unwrap()
 
-def iter_entities(process: ComplexProcessHandle, start=1, end=32):
-    for i in range(start, end):
-        yield get_entity(process, i)
+    for id in range(start, end):
+        entry = read_memory(process, entity_list + 0x10, 'q').unwrap()
+        controller = read_memory(process, entry + SPACING * (id & 0x1FF), 'q').unwrap()
+
+        pawn = read_memory(process, controller + 0x794, 'q').unwrap()
+        entry_2 = read_memory(process, entity_list + 0x8 * ((pawn & 0x7FFF) >> 9) + 16, 'q').unwrap()
+
+        address = read_memory(process, entry_2 + SPACING * (pawn & 0x1FF), 'q').unwrap()
+
+        entity = Entity(id, address, process)
+
+        yield entity

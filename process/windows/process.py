@@ -2,72 +2,13 @@ import ctypes
 import struct
 from ctypes import wintypes
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Generator
 
+from process.interfaces import ComplexProcessHandle, MemoryPiece, ProcessModule, SimpleProcessHandle
 from process.structs import MEMORY_BASIC_INFORMATION
 
 
-@dataclass(eq=True, frozen=True)
-class ProcessModule:
-    name: str
-    base_address: int
-    size: int
-
-    def __add__(self, other):
-        if isinstance(other, int):
-            return self.base_address + other
-
-        raise TypeError
-
-    def __int__(self):
-        return self.base_address
-
-
-@dataclass(eq=True, frozen=True)
-class SimpleProcessHandle:
-    name: str
-    pid: int
-    handle: ctypes.c_void_p
-
-
-@dataclass(eq=True, frozen=True)
-class ComplexProcessHandle(SimpleProcessHandle):
-    modules: set[ProcessModule]
-
-
-@dataclass(eq=True, frozen=True)
-class MemoryPiece:
-    process: SimpleProcessHandle
-    address: int
-    data: bytes
-    format: str
-
-    # uses struct to parse bytes to a data type
-    def into(self, data_type: str | None = None) -> Any:
-        if data_type is None:
-            data_type = self.format
-
-        unpacked = struct.unpack(data_type, self.data)
-
-        if len(unpacked) == 1:
-            return unpacked[0]
-
-        return unpacked
-
-    def read(self):
-        return read_memory(self.process, self.address, self.format)
-
-    def write(self):
-        write_memory(self.process, self.address, self.data)
-
-    def __add__(self, other):
-        if isinstance(other, int):
-            return MemoryPiece(self.process, self.address + other, self.data, self.format)
-
-        raise TypeError
-
-
-def get_all_processes():
+def get_all_processes() -> Generator[SimpleProcessHandle, Any, None]:
 
     # get the handle to the process
     handle: int = ctypes.windll.kernel32.CreateToolhelp32Snapshot(
@@ -214,7 +155,7 @@ def get_all_modules(process: SimpleProcessHandle, buffer_size=1024):
 _modules_memoize: dict[ctypes.c_void_p, dict[str, ProcessModule]] = {}
 
 
-def find_module_by_name(process: SimpleProcessHandle | ComplexProcessHandle, name: str):
+def find_module_by_name(process: SimpleProcessHandle | ComplexProcessHandle, name: str) -> ProcessModule:
 
     # use process handle as key
     if process.handle not in _modules_memoize:

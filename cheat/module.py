@@ -4,11 +4,10 @@ from threading import Thread
 import time
 from typing import Callable, TypeVar
 
-from process.offsets import Offsets
-from process.process import ComplexProcessHandle, find_module_by_name, has_active_window, read_memory
+from process import offsets, ComplexProcessHandle, find_module_by_name, has_active_window, read_memory
 
 
-ModuleUpdateFn = Callable[[ComplexProcessHandle, Offsets], None]
+ModuleUpdateFn = Callable[[ComplexProcessHandle], None]
 
 
 class ModuleStatus(Enum):
@@ -27,7 +26,7 @@ class CheatModule:
     interval: float = 1 / 1000
     status: ModuleStatus = ModuleStatus.INACTIVE
 
-    def run(self, process: ComplexProcessHandle, offsets: Offsets):
+    def run(self, process: ComplexProcessHandle):
 
         if self.status == ModuleStatus.ERROR:
             raise Exception('Cannot start errored module')
@@ -35,28 +34,14 @@ class CheatModule:
         self.status = ModuleStatus.ACTIVE
 
         def loop():
-            engine = find_module_by_name(process, 'engine.dll')
-
             while self.status != ModuleStatus.INACTIVE:
                 time.sleep(self.interval)
 
-                client_state = read_memory(
-                    process, engine + offsets.dwClientState
-                ).into('i')
 
-                # 0     = lobby
-                # 2 - 5 = loading
-                # 6     = in game
-                game_state = read_memory(
-                    process, client_state + offsets.dwClientState_State
-                ).into('i')
-
-
-
-                if self.status == ModuleStatus.PAUSED or not has_active_window(process) or game_state != 6:
+                if self.status == ModuleStatus.PAUSED or not has_active_window(process):
                     continue
 
-                self.update(process, offsets)
+                self.update(process)
 
         def wrapper():
             nonlocal self
@@ -64,10 +49,6 @@ class CheatModule:
             try:
                 loop()
             except Exception as e:
-                print(f'''
-                    Error in module '{self.name}':
-                    {e}
-                ''')
                 self.status = ModuleStatus.ERROR
                 raise e
 
@@ -81,7 +62,6 @@ class CheatModule:
         return self
 
     def resume(self):
-
         if self.status == ModuleStatus.ERROR:
             raise Exception('Cannot resume errored module')
 
@@ -93,7 +73,6 @@ class CheatModule:
         return self
 
     def pause(self):
-
         if self.status == ModuleStatus.ERROR:
             raise Exception('Cannot pause errored module')
 
